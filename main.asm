@@ -53,7 +53,7 @@ MAIN:
             LD      HL,HEADERDATA ; Loads the header data to HL
             CALL    HEADER        ; This prints the header data on startup
             ;HALT                 ; Halts the system - I use it to debug my hardware
-            CALL    SHELLLOOP
+            JP    SHELLLOOP
 
 
 SHELLLOOP:   
