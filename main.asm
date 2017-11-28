@@ -37,21 +37,11 @@ RAMEND:     EQU     $7FFF       ; Top address of RAM
 ;******************************************************************
 INIT_SYSTEM:
             LD     SP,RAMEND    ; Loads the contents of RAMEND to Stack Pointer
-
-INIT_UART:
-            LD     A,80H        ; Mask to Set DLAB Flag
-			OUT    (03H),A
-			LD     A,12         ; Divisor = 12 @ 9600bps w/ 1.8432 Mhz
-			OUT    (00H),A      ; Set BAUD rate to 9600
-			LD     A,00
-			OUT    (01H),A      ; Set BAUD rate to 9600
-			LD     A,03H
-			OUT    (03H),A      ; Set 8-bit data, 1 stop bit, reset DLAB Flag
-            JP     MAIN
+            CALL   INIT_UART
 
 MAIN:
-            LD      HL,HEADERDATA ; Loads the header data to HL
-            CALL    HEADER        ; This prints the header data on startup
+            CALL    CLEAR_SCREEN
+            CALL    HEADER_START       ; This prints the header data on startup
             ;HALT                 ; Halts the system - I use it to debug my hardware
             JP    SHELLLOOP
 
@@ -79,7 +69,16 @@ USER_INPUT:
 ; Any functions that deals with prepping output - UART is excluded
 ;*******************************************************************
           
-            
+CLEAR_SCREEN:
+            PUSH    AF
+            LD      A,0CH
+            CALL    UART_PRINT
+            POP     AF
+            RET
+
+HEADER_START:
+            LD      HL,HEADERDATA ; Loads the header data to HL            
+
             
 HEADER:
             LD      A,(HL)          ; Loads HL memory location to A
@@ -92,16 +91,21 @@ HEADER:
 HEADEREND:
             RET                     ; Returns to function that called Header
 
-;*******************************************************************
-;"System calls" section - this will include UART checks and outs
-;In an attempt to make this modular I'm breaking these functions up.
-;This will hopefully make code expansion much easier to deal with.
-;*******************************************************************
-
 
 ;*******************************************************************
 ;UART Functions
 ;*******************************************************************
+INIT_UART:
+            LD     A,80H        ; Mask to Set DLAB Flag
+			OUT    (03H),A
+			LD     A,01         ; Divisor = 12 @ 9600bps w/ 1.8432 Mhz
+			OUT    (00H),A      ; Set BAUD rate to 9600
+			LD     A,00
+			OUT    (01H),A      ; Set BAUD rate to 9600
+			LD     A,03H
+			OUT    (03H),A      ; Set 8-bit data, 1 stop bit, reset DLAB Flag
+            RET
+
 
 UART_PRINT:
             PUSH    AF              ; Preserving AF data in the stack
@@ -139,4 +143,4 @@ UART_RXCHECK:
 
             
 ;Data and Strings            
-HEADERDATA:  DB      "\n\rSimpleShell\r\nrev 0.1\r\nCreated by: JamesIsAwkward\r\n",0
+HEADERDATA:  DB      "\n\rSimpleShell v0.1.0\r\nCreated by: JamesIsAwkward\r\n",0
