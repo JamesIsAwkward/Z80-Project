@@ -6,6 +6,9 @@
 ;  user input                       *
 ;************************************
 
+; Special thanks to MatthewWCook for his UART chart and code!!!!!
+
+
 ;******************************************************************
 ;UART Info
 ;
@@ -36,20 +39,43 @@ RAMEND:     EQU     $7FFF       ; Top address of RAM
 ;INIT_UART handles.... UART INIT
 ;******************************************************************
 INIT_SYSTEM:
+            LD     A,0
+            LD     B,0
+            LD     HL,0 
             LD     SP,RAMEND    ; Loads the contents of RAMEND to Stack Pointer
             CALL   INIT_UART
+            
 
 MAIN:
             CALL    CLEAR_SCREEN
             CALL    HEADER_START       ; This prints the header data on startup
             ;HALT                 ; Halts the system - I use it to debug my hardware
-            JP    SHELLLOOP
+            JP      SHELLLOOP_PROMPT
 
 
-SHELLLOOP:   
+;*******************************************************************
+; SHELLLOOP will loop forever while display the cursor data and
+; parse all data that in entered by the user
+;
+; At least.... it will :P
+;*******************************************************************
+
+SHELLLOOP_PROMPT:
+            LD      HL,SHELL_CURSORDATA
+            CALL    UART_PRINTSTR
+
+SHELLLOOP:  
             CALL    USER_INPUT
+            CP      0DH                 ;0D is hex for carriage return AKA return button
+            JP      Z,SHELLLOOP_INPUT
             CALL    UART_PRINT
             JP      SHELLLOOP
+            
+SHELLLOOP_INPUT:
+            CALL    NEW_LINE
+            JP      SHELLLOOP_PROMPT
+            
+            
 
 ;*******************************************************************
 ; Input functions
@@ -66,29 +92,36 @@ USER_INPUT:
 
 ;*******************************************************************
 ; Output functions
-; Any functions that deals with prepping output - UART is excluded
+; Any functions that deal with prepping output - UART is excluded
 ;*******************************************************************
           
 CLEAR_SCREEN:
             PUSH    AF
-            LD      A,0CH
+            LD      A,0CH         ; 0C hex is "form feed" in ASCII
             CALL    UART_PRINT
             POP     AF
             RET
 
+NEW_LINE:
+            PUSH    HL
+            LD      HL,NEW_LINE_DATA        ; 0A hex is "line feed" in ASCII
+            CALL    UART_PRINTSTR
+            POP     HL
+            RET
+
 HEADER_START:
             LD      HL,HEADERDATA ; Loads the header data to HL            
-
+            JP      UART_PRINTSTR
             
-HEADER:
+UART_PRINTSTR:
             LD      A,(HL)          ; Loads HL memory location to A
             CP      0               ; Compared data to 0 (which is EOF)
-            JP      Z,HEADEREND     ; If it is 0, jump to end function
+            JP      Z,UART_PRINTSTR_END     ; If it is 0, jump to end function
             CALL    UART_PRINT      ; Makes sure UART is ready to send
             INC     HL              ; Increments HL to next byte in string
-            JP      HEADER          ; Starts loop over again to prnt the next byte
+            JP      UART_PRINTSTR         ; Starts loop over again to prnt the next byte
             
-HEADEREND:
+UART_PRINTSTR_END:
             RET                     ; Returns to function that called Header
 
 
@@ -98,10 +131,10 @@ HEADEREND:
 INIT_UART:
             LD     A,80H        ; Mask to Set DLAB Flag
 			OUT    (03H),A
-			LD     A,01         ; Divisor = 12 @ 9600bps w/ 1.8432 Mhz
-			OUT    (00H),A      ; Set BAUD rate to 9600
+			LD     A,01         ; Divisor = 1 @ 115200 bps w/ 1.8432 Mhz
+			OUT    (00H),A      ; Set BAUD rate to 115200
 			LD     A,00
-			OUT    (01H),A      ; Set BAUD rate to 9600
+			OUT    (01H),A      ; Set BAUD rate to 115200
 			LD     A,03H
 			OUT    (03H),A      ; Set 8-bit data, 1 stop bit, reset DLAB Flag
             RET
@@ -142,5 +175,7 @@ UART_RXCHECK:
 
 
             
-;Data and Strings            
-HEADERDATA:  DB      "\n\rSimpleShell v0.1.0\r\nCreated by: JamesIsAwkward\r\n",0
+;Data and Strings
+NEW_LINE_DATA:      DB      "\r",0
+SHELL_CURSORDATA:   DB      "\n\rSimpleShell>",0
+HEADERDATA:         DB      "\n\rSimpleShell v0.1.0\r\nCreated by: JamesIsAwkward\r",0
