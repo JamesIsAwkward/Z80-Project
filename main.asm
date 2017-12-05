@@ -6,10 +6,8 @@
 ;  user input                       *
 ;************************************
 
-; Special thanks to MatthewWCook for his UART chart and code!!!!!
-
-
 ;******************************************************************
+; Special thanks to MatthewWCook for his UART chart and code!!!!!
 ;UART Info
 ;
 ;DLAB A2 A1 A0 Register
