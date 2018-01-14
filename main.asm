@@ -1,5 +1,6 @@
 ;
 ;  SimpleShell
+;
 ;  Super Simple Shell-like Monitor
 ;  All it does for now is print
 ;  the header data and then echo
@@ -40,12 +41,14 @@
 ORG                 $0000
 
 ; I'm using a ROM-less build for now, so this will be changed later
-RAMEND:     EQU     $7FFF       ; Top address of RAM
+
+RAMEND:                 EQU     $7FFF ; Top address of RAM
+INPUT_BUFFER_START:     EQU     $3FFF ; Input buffer space
+INPUT_BUFFER_END:       EQU     $401F ; End of buffer for overflow protection later
 
 ;******************************************************************
 ;Init functions
 ;INIT_SYSTEM handles Stack Pointer and etc
-;INIT_UART handles.... UART INIT
 ;******************************************************************
 INIT_SYSTEM:
             LD     A,0          ; Quick cleanup to help with testing
@@ -62,19 +65,16 @@ MAIN:
             JP      SHELLLOOP_START
 
 
-;*******************************************************************
-; SHELLLOOP will loop forever while display the cursor data and
-; parse all data that in entered by the user
 ;
-; At least.... it will :P
-;*******************************************************************
+; SHELLLOOP functions
+;
 
 SHELLLOOP_START:
-            LD      HL,$3FFF            ; Manual memory assignment for the input buffer
+            LD      DE,INPUT_BUFFER_START         ; Manual memory assignment for the input buffer
 
 SHELLLOOP_PROMPT:
             PUSH    HL
-            LD      HL,SHELL_CURSORDATA
+            LD      HL,SHELL_CURSOR_DATA
             CALL    UART_PRINTSTR
             POP     HL
 
@@ -82,56 +82,100 @@ SHELLLOOP:
             CALL    USER_INPUT
             CP      0DH                 ; 0D is hex for carriage return AKA return button
             JP      Z,SHELLLOOP_INPUT_START ; If return is entered, go to shell loop input start function
-            CP      08H                 ; 08 is hex for backspace
-            CALL    Z,BACKSPACE         ; If backspace is input, then go to backspace function
+            CP      7FH                 ; 7F is hex for backspace in putty (default)
+            JP      Z,BACKSPACE         ; If backspace is input, then go to backspace function
             CALL    INPUT_BUFFER        ; If not, call Input buffer function 
             JP      SHELLLOOP           ; Start loop over
             
+            
 BACKSPACE:                              ; Function dedicated to backspace.. this good practice?
+            PUSH    AF
             LD      A,B                 ; Loads counter into A
             CP      0                   ; Check if counter is 0
-            RET                         ; If it is, I don't want to backspace anymore to I ret
-            DEC     B                   ; If it isn't 0 then it will DEC because backspace
-            DEC     HL                  ; It'll also back up the input buffer as well
+            JP      Z,BACKSPACE_STOP    ;
+            POP     AF
             CALL    UART_PRINT          ; Print the backspace
-            RET                         ; Return
+            DEC     B                   ; If it isn't 0 then it will DEC because backspace
+            LD      A,00H
+            LD      (DE),A
+            DEC     DE                  ; It'll also back up the input buffer as well
+            JP      SHELLLOOP
             
+BACKSPACE_STOP:
+            POP     AF
+            JP      SHELLLOOP
+ 
 ;
-; Currently has no overflow protection     
-; Just a test, this will echo back your input 
-; after you type it and press enter.      
+; Input functions
+; Any functions that deal with receiving inputs and parsing them
+;
+
+
+
+;
+; Currently has no overflow protection    
 
 INPUT_BUFFER:
-            LD      (HL),A              ; Loads input data into HL pointer
-            INC     HL                  ; INC HL to get ready for next inputs
+            LD      (DE),A              ; Loads input data into HL pointer
+            INC     DE                  ; INC DE to get ready for next inputs
             INC     B                   ; INC the counter to keep tabs on where the cursor is and how many bytes I've typed
             CALL    UART_PRINT          ; Prints the input
             RET                         ; Return
-           
-           
-           
+
+          
 SHELLLOOP_INPUT_START:
-            LD      HL,$3FFF            ; Manually addressing the start of my input buffer
+            LD      A,0
+            LD      (DE),A
+            LD      DE,INPUT_BUFFER_START            ; Manually addressing the start of my input buffer
            
 SHELLLOOP_INPUT:
             LD      A,B                 ; Load the counter to A
             CP      0                   ; See if the counter is at 0
             JP      Z,SHELLLOOP_START   ; If so, there is no (or shouldn't be..) data to output
-            LD      A,(HL)              ; Loads A with data from buffer
-            CALL    UART_PRINT          ; Prints data
-            INC     HL                  ; Shifts HL to next byte for the next loop
-            DEC     B                   ; DEC counter to keep up with remaining data
-            JP      SHELLLOOP_INPUT     ; Start the loop over
+            PUSH    BC
+            CALL    INPUT_PARSE_START
+            POP     BC
+            JP      SHELLLOOP_INPUT_END
             
+INPUT_PARSE_START:
+            LD      HL,TEST_COMMAND     ; Loads HL with first command
+            LD      DE,INPUT_BUFFER_START
+            CALL    INPUT_PARSE
+            CP      1
+            JP      Z,TEST_CMD
+            LD      HL,CALC_COMMAND     ; Loads HL with second command
+            LD      DE,INPUT_BUFFER_START
+            CALL    INPUT_PARSE
+            CP      1
+            JP      Z,CALC_CMD
+            CALL    INVALID_CMD
+            RET
+            
+INPUT_PARSE:
+            LD      A,(DE)                   ; Loads input
+            CP      (HL)                     ; CP first byte of input to first byte of cmd
+            JP      NZ,INPUT_PARSE_FALSE     ; If it doesn't match, then end
+            CP      0
+            JP      Z,INPUT_PARSE_END
+            INC     HL
+            INC     DE
+            JP      INPUT_PARSE
+            
+            
+INPUT_PARSE_END:  
+            LD      A,1
+            RET
+
+INPUT_PARSE_FALSE:
+            LD      A,0
+            RET
+            
+        
 SHELLLOOP_INPUT_END:
             LD      B,0                 ; Reset the counter back to 0
             CALL    NEW_LINE            ; Start a new blank line
             JP      SHELLLOOP_START     ; 
 
-;*******************************************************************
-; Input functions
-; Any functions that deal with grabbing inputs or processing them
-;*******************************************************************
 
 USER_INPUT:
 			IN      A,(05H)        ; Get the line status register's contents
@@ -141,10 +185,10 @@ USER_INPUT:
             RET
 
 
-;*******************************************************************
-; Output functions
-; Any functions that deal with prepping output - UART is excluded
-;*******************************************************************
+;
+; Terminal functions
+; Any functions that deal with terminal output
+;
           
 CLEAR_SCREEN:
             PUSH    AF
@@ -160,12 +204,18 @@ NEW_LINE:
             POP     HL
             RET
 
+INVALID_CMD:
+            LD      HL,INVALID_COMMAND_DATA
+            CALL    UART_PRINTSTR
+            RET
+            
+            
 HEADER_START:
             LD      HL,HEADERDATA ; Loads the header data to HL            
             JP      UART_PRINTSTR
             
 UART_PRINTSTR:
-            LD      A,(HL)          ; Loads HL memory location to A
+            LD      A,(HL)          ; 
             CP      0               ; Compared data to 0 (which is EOF)
             JP      Z,UART_PRINTSTR_END     ; If it is 0, jump to end function
             CALL    UART_PRINT      ; Makes sure UART is ready to send
@@ -175,20 +225,7 @@ UART_PRINTSTR:
 UART_PRINTSTR_END:
             RET                     ; Returns to function that called Header
 
-
-;*******************************************************************
-;UART Functions
-;*******************************************************************
-INIT_UART:
-            LD     A,80H        ; Mask to Set DLAB Flag
-			OUT    (03H),A
-			LD     A,01         ; Divisor = 1 @ 115200 bps w/ 1.8432 Mhz
-			OUT    (00H),A      ; Set BAUD rate to 115200
-			LD     A,00
-			OUT    (01H),A      ; Set BAUD rate to 115200
-			LD     A,03H
-			OUT    (03H),A      ; Set 8-bit data, 1 stop bit, reset DLAB Flag
-            RET
+            
 
 
 UART_PRINT:
@@ -201,6 +238,22 @@ UART_PRINT:
 
 UART_PRINT_END:
             RET                 ; Returns to function that called UART_PRINT
+            
+
+;
+;UART Functions
+;
+
+INIT_UART:
+            LD     A,80H        ; Mask to Set DLAB Flag
+			OUT    (03H),A
+			LD     A,01         ; Divisor = 1 @ 115200 bps w/ 1.8432 Mhz
+			OUT    (00H),A      ; Set BAUD rate to 115200
+			LD     A,00
+			OUT    (01H),A      ; Set BAUD rate to 115200
+			LD     A,03H
+			OUT    (03H),A      ; Set 8-bit data, 1 stop bit, reset DLAB Flag
+            RET
 
 
 UART_TXCHECK:
@@ -217,18 +270,47 @@ UART_RXCHECK:
             JP      Z,UART_RXCHECK    ; If not, go back and check again
             POP     AF
             RET
+            
+
+;
+; Command functions
+; 
 
 
-
-
-
+TEST_CMD:
+            PUSH    HL
+            LD      HL,TEST_COMMAND_DATA
+            CALL    NEW_LINE
+            CALL    UART_PRINTSTR
+            POP     HL
+            RET
+            
+CALC_CMD:
+            LD      HL,CALC_COMMAND_DATA
+            CALL    UART_PRINTSTR
+            JP      SHELLLOOP_START
 
 
 
             
-;Data and Strings
+; Data and Strings
 NEW_LINE_DATA:      DB      "\r",0
-SHELL_CURSORDATA:   DB      "\n\rSimpleShell>",0
-HEADERDATA:         DB      "\n\rSimpleShell v0.1.1\r\nCreated by: JamesIsAwkward\r",0
+SHELL_CURSOR_DATA:  DB      "\n\rSimpleShell> ",0
+HEADERDATA:         DB      "\n\rSimpleShell v0.3.0\r\nCreated by: JamesIsAwkward\r",0
+
+
+
+; Command List
+TEST_COMMAND:       DB      "test",0
+TEST_COMMAND_DATA:  DB      "\n\rTesting 1, 2, 3!",0
+
+CALC_COMMAND:       DB      "calc",0
+CALC_COMMAND_DATA:  DB      "\n\rDo you want to add, subtract, multiply, or divide?",0
+CALC_CURSOR_DATA:   DB      "\n\r\Calc> ",0
+CALC_ADD_DATA:      DB      "add",0
+CALC_SUBTRACT_DATA: DB      "subtract",0
+CALC_ADD_PRINT:     DB      "Add!",0
+
+INVALID_COMMAND_DATA:   DB  "\n\rYou have entered an invalid command.",0
 
 END
