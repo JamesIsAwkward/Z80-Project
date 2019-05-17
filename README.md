@@ -12,7 +12,7 @@ ECS-100AX-018 - UART Clock<br>
 PC16550DN/NOPB - UART<br>
 
 
-## Old compiling and EEPROM writing process (Old process)
+## Old compiling and EEPROM writing process
 As of right now I have a really tedious 7 stage process to write my software to my z80 machine.<br>
 
 Stage 1: Write the code. I use Notepad++<br>
