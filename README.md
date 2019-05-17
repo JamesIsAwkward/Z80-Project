@@ -4,12 +4,17 @@ Z80 breadboard computer
 I plan to create my hardware schematic one day, even though its just a bunch of spaghetti.
 
 ## Hardware
+# Z80 SBC
 Z84C0010PEG - Z80<br>
 CY62256NLL-70PXC - SRAM<br>
 AT28C64B-15PU - EEPROM<br>
 ECS-2100AX-100 - System Clock<br>
 ECS-100AX-018 - UART Clock<br>
 PC16550DN/NOPB - UART<br>
+
+# Arduino Programmer Circuit
+Arduino Nano x2 (one for progrmaming, one to set Z80 to "program mode" or "run mode"<br>
+74HC595 x2<br>
 
 
 ## Old compiling and EEPROM writing process
