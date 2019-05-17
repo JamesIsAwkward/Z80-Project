@@ -12,9 +12,8 @@ ECS-100AX-018 - UART Clock<br>
 PC16550DN/NOPB - UART<br>
 
 
-## Compiling Software
-As of right now I have a really crappy 7 stage process to write my software to my z80 machine.<br>
-I'm working on a bash script that will hopefully replace steps 3, 4, and 5.<br>
+## Old compiling and EEPROM writing process (Old process)
+As of right now I have a really tedious 7 stage process to write my software to my z80 machine.<br>
 
 Stage 1: Write the code. I use Notepad++<br>
 Stage 2: Copy code to my Debian machine<br>
@@ -23,3 +22,9 @@ Stage 4: Convert to "intel" hex data with xxd<br>
 Stage 5: Convert to hex data to byte data<br>
 Stage 6: Load byte data to Arduino<br>
 Stage 7: "flash" to z80 machine with arduino<br>
+
+
+## New compiling and EEPROM writing process
+So my old process worked but was kind of inefficient. I was having to manually manipulate the data at each stage and then actually burn it to the arduino. Once the arduino booted it would dump the stored data to an EEPROM or SRAM.
+
+I opted to find a way to combine stage 3-7, and bash makes this pretty trivial. Also I wanted to stop burning my ROM to the Arduino and actually send the arduino my data via serial. Then the Arduino can burn to the EEPROM or SRAM as it recieves the serial data. This will also be useful if my software ever becomes larger than the space available in the Arduno's ROM.
